@@ -4,9 +4,10 @@ import {Search,BriefcaseBusiness,MapPin,Clock3,Code2,Plus,RefreshCw,Edit3,Trash2
 import "./styles.css";
 
 const API="https://jobapp-backend-esk4.onrender.com";
+let authHeader="";
 
 async function api(path,options={}){
-  const res=await fetch(API+path,{headers:{"Content-Type":"application/json",...(options.headers||{})},...options});
+  const res=await fetch(API+path,{...options,headers:{"Content-Type":"application/json",...(authHeader?{Authorization:authHeader}:{}),...(options.headers||{})}});
   const text=await res.text();
   let data=null; try{data=text?JSON.parse(text):null}catch{data=text}
   if(!res.ok) throw new Error(typeof data==="string"?data:`Request failed (${res.status})`);
@@ -20,9 +21,18 @@ function App(){
  const [search,setSearch]=useState(""),[query,setQuery]=useState(""),[selected,setSelected]=useState(null);
  const [admin,setAdmin]=useState(false),[mobile,setMobile]=useState(false),[form,setForm]=useState(null);
  const [notice,setNotice]=useState(null),[busy,setBusy]=useState(false),[sort,setSort]=useState("default");
+ const [authenticated,setAuthenticated]=useState(false),[username,setUsername]=useState(""),[password,setPassword]=useState(""),[loginBusy,setLoginBusy]=useState(false),[loginError,setLoginError]=useState("");
 
+ const signIn=async e=>{
+   e.preventDefault();setLoginBusy(true);setLoginError("");
+   authHeader="Basic "+btoa(username+":"+password);
+   try{const data=await api("/JobPosts");setJobs(data||[]);setAuthenticated(true);setPassword("");setError("");}
+   catch(err){authHeader="";setLoginError(err.message==="Request failed (401)"?"Incorrect username or password.":err.message);}
+   finally{setLoginBusy(false);setLoading(false);}
+ };
+ const signOut=()=>{authHeader="";setAuthenticated(false);setUsername("");setPassword("");setJobs([]);setQuery("");setSearch("");setAdmin(false);setSelected(null);setForm(null);setError("");};
  const loadAll=async()=>{setLoading(true);setError("");try{setJobs(await api("/JobPosts")||[])}catch(e){setError(e.message)}finally{setLoading(false)}};
- useEffect(()=>{loadAll()},[]);
+ useEffect(()=>{if(authHeader)loadAll();else setLoading(false)},[]);
  const runSearch=async term=>{
    const t=term.trim(); if(!t){setQuery("");return loadAll()}
    setLoading(true);setError("");
@@ -51,11 +61,11 @@ function App(){
   <header className="top"><div className="nav">
    <button className="brand" onClick={()=>{setAdmin(false);document.getElementById("home")?.scrollIntoView({behavior:"smooth"})}}><span><BriefcaseBusiness size={18}/></span>Job<span>App</span></button>
    <nav><button className={!admin?"active":""} onClick={()=>setAdmin(false)}>Find Jobs</button><button className={admin?"active":""} onClick={()=>setAdmin(true)}><ShieldCheck size={14}/> Manage</button></nav>
-   <div className="right"><div className="live"><i/> API Online</div><button className="menu" onClick={()=>setMobile(!mobile)}><Menu/></button></div>
+   <div className="right"><div className="live"><i/> {authenticated?"Authenticated":"Sign in required"}</div>{authenticated?<button className="authNavBtn" onClick={signOut}>Sign out</button>:<button className="authNavBtn" onClick={()=>document.getElementById("login-user")?.focus()}>Sign in</button>}<button className="menu" onClick={()=>setMobile(!mobile)}><Menu/></button></div>
   </div></header>
   {mobile&&<div className="mobileNav"><button onClick={()=>{setAdmin(false);setMobile(false)}}>Find Jobs</button><button onClick={()=>{setAdmin(true);setMobile(false)}}>Manage Jobs</button></div>}
 
-  {!admin?<main id="home">
+  {!authenticated?<main className="loginPage"><div className="formModal loginCard"><div className="formHead"><div><label>SECURE ACCESS</label><h2>Sign in to JobApp</h2></div><ShieldCheck size={24}/></div><p className="loginIntro">Use the username and password configured in your Spring Boot backend.</p><form onSubmit={signIn}><label>Username<input id="login-user" autoComplete="username" value={username} onChange={e=>setUsername(e.target.value)} required placeholder="Enter username"/></label><label>Password<input type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} required placeholder="Enter password"/></label>{loginError&&<div className="loginError">{loginError}</div>}<button className="primary loginSubmit" disabled={loginBusy||!username||!password}>{loginBusy?"Signing in...":"Sign in"}</button></form><p className="loginNote">Your credentials are kept in memory for this tab and are not saved to local storage.</p></div></main>:!admin?<main id="home">
    <section className="hero"><div className="heroIn">
     <div className="pill"><Code2 size={13}/> SKILL-FIRST JOB DISCOVERY</div>
     <h1>Find work that<br/><em>fits your skills.</em></h1>
